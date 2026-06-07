@@ -100,5 +100,14 @@ ansible-playbook playbooks/deploy.yaml \
   -e "aws_account_id=123456789012"
 ```
 
+---
 
+## Design Decisions
 
+For a full walkthrough of architectural choices, trade-offs, and the reasoning behind key implementation decisions, see [decisions.md](../decisions.md).
+
+---
+
+## AI Use
+
+AI tooling (Claude Code) was used for the majority of initial scaffolding and code generation throughout this case study. All key architectural decisions, trade-offs, code quality and the overall thought process behind the implementation are solely my own.
