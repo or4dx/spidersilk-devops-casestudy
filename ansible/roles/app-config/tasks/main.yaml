@@ -1,0 +1,38 @@
+---
+# Role: app-config
+# Renders environment-specific Helm values from Ansible group_vars, then
+# deploys the csv-processor Helm chart into the target namespace.
+#
+# Tags:
+#   config  — render values file only (dry-run without deploying)
+#   deploy  — render + helm upgrade --install
+
+- name: Render Helm values from Ansible group_vars
+  ansible.builtin.template:
+    src: values.yaml.j2
+    dest: /tmp/{{ app_name }}-values.yaml
+    mode: "0600"
+  tags: [config, deploy]
+
+- name: Deploy application with Helm
+  ansible.builtin.command:
+    # chdir to ansible/ so the relative chart_path (../helm/csv-processor) resolves
+    # correctly regardless of where ansible-playbook is invoked from.
+    chdir: "{{ playbook_dir }}/.."
+    cmd: >
+      helm upgrade --install {{ helm_release_name }}
+      {{ chart_path }}
+      --namespace {{ app_namespace }}
+      --create-namespace
+      --values /tmp/{{ app_name }}-values.yaml
+      --wait
+      --timeout 5m
+  tags: [deploy]
+
+- name: Remove rendered values file
+  # The rendered file may contain secrets interpolated from all.vault.yaml.
+  # Delete it after deploy so it is never left on disk unencrypted.
+  ansible.builtin.file:
+    path: /tmp/{{ app_name }}-values.yaml
+    state: absent
+  tags: [config, deploy]

@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSV Processor — Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js" integrity="sha384-en/ztfPSRkGfME4KIm05joYXynqzUgbsG5nMrj/xEFAHXkeZfO3yMK8QQ+mP7p1/" crossorigin="anonymous"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background: #020617;
+      min-height: 100vh;
+      padding: 2rem;
+      color: white;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .header-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 0.5rem;
+    }
+    .pulse-dot {
+      width: 12px; height: 12px;
+      background: #22d3ee;
+      border-radius: 50%;
+      flex-shrink: 0;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; }
+    .subtitle { color: #64748b; font-size: 0.8rem; margin-left: 1.75rem; }
+    .diagram-container {
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 1rem;
+      border: 1px solid #1e293b;
+      padding: 1.5rem;
+      overflow-x: auto;
+    }
+    svg { width: 100%; min-width: 900px; display: block; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+    .card {
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 0.75rem;
+      border: 1px solid #1e293b;
+      padding: 1.25rem;
+    }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .card-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .card h3 { font-size: 0.85rem; font-weight: 600; }
+    .card ul { list-style: none; color: #64748b; font-size: 0.72rem; }
+    .card li { margin-bottom: 0.35rem; line-height: 1.5; }
+    .footer { text-align: center; margin-top: 1.5rem; color: #334155; font-size: 0.7rem; }
+    .toolbar { display: flex; gap: 0.5rem; margin-left: auto; flex-shrink: 0; align-items: center; }
+    .toolbar-toggle {
+      background: transparent; border: none; color: #475569;
+      cursor: pointer; font-size: 1.25rem; line-height: 1;
+      padding: 0.25rem 0.5rem; border-radius: 0.375rem;
+      transition: color 0.2s, background 0.2s;
+    }
+    .toolbar-toggle:hover { color: #94a3b8; background: rgba(30,41,59,0.5); }
+    .toolbar-actions { display: none; gap: 0.5rem; }
+    .toolbar.expanded .toolbar-actions { display: flex; }
+    .toolbar-actions button {
+      background: rgba(30,41,59,0.8); border: 1px solid #334155;
+      color: #94a3b8; padding: 0.375rem 0.75rem; border-radius: 0.375rem;
+      font-family: inherit; font-size: 0.75rem; cursor: pointer;
+      transition: all 0.2s; white-space: nowrap;
+    }
+    .toolbar-actions button:hover { background: rgba(51,65,85,0.8); color: white; border-color: #475569; }
+    @media print { body { background: #020617; padding: 1rem; } .toolbar { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="container" id="report-container">
+
+    <div class="header">
+      <div class="header-row">
+        <div class="pulse-dot"></div>
+        <h1>CSV Processor — System Architecture</h1>
+        <div class="toolbar">
+          <div class="toolbar-actions">
+            <button onclick="copyAsImage(this)">📋 Copy</button>
+            <button onclick="downloadPNG(this)">🖼️ PNG</button>
+            <button onclick="downloadPDF(this)">📄 PDF</button>
+          </div>
+          <button class="toolbar-toggle" onclick="this.parentElement.classList.toggle('expanded')" title="Export options">⋯</button>
+        </div>
+      </div>
+      <p class="subtitle">Go · Kubernetes (KOPS) · Nginx sidecar · AWS S3 · Helm · Ansible</p>
+    </div>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1000 680">
+        <defs>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+          </pattern>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+          </marker>
+          <marker id="arrowhead-cyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee"/>
+          </marker>
+          <marker id="arrowhead-amber" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#fbbf24"/>
+          </marker>
+          <marker id="arrowhead-violet" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa"/>
+          </marker>
+        </defs>
+
+        <!-- Background -->
+        <rect width="1000" height="680" fill="#020617"/>
+        <rect width="1000" height="680" fill="url(#grid)"/>
+
+        <!-- ═══════════════════════════════════════════════════
+             ARROWS — drawn first so boxes render on top
+             ═══════════════════════════════════════════════════ -->
+
+        <!-- 1. User → Nginx (HTTP :80) -->
+        <line x1="131" y1="270" x2="244" y2="270" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrowhead-cyan)"/>
+        <text x="187" y="262" fill="#22d3ee" font-size="8" text-anchor="middle" font-family="JetBrains Mono, monospace">HTTP :80</text>
+
+        <!-- 2a. Nginx → App (proxy_pass request) -->
+        <line x1="391" y1="262" x2="454" y2="262" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <!-- 2b. App → Nginx (response) -->
+        <line x1="454" y1="278" x2="391" y2="278" stroke="#334155" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <text x="422" y="254" fill="#64748b" font-size="8" text-anchor="middle" font-family="JetBrains Mono, monospace">proxy_pass</text>
+
+        <!-- 3. App → S3 (PutObject / upload) -->
+        <line x1="601" y1="262" x2="819" y2="262" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrowhead-amber)"/>
+        <text x="710" y="254" fill="#fbbf24" font-size="8" text-anchor="middle" font-family="JetBrains Mono, monospace">PutObject</text>
+
+        <!-- 4. S3 → App (ListObjects, dashed return) -->
+        <line x1="819" y1="278" x2="601" y2="278" stroke="#78350f" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrowhead)"/>
+        <text x="710" y="293" fill="#78350f" font-size="8" text-anchor="middle" font-family="JetBrains Mono, monospace">ListObjects</text>
+
+        <!-- 5. emptyDir → Nginx (reads static files, L-path) -->
+        <path d="M 355,350 L 355,325 L 322,325 L 322,306" fill="none" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrowhead-violet)"/>
+        <text x="341" y="319" fill="#a78bfa" font-size="8" text-anchor="middle" font-family="JetBrains Mono, monospace">reads</text>
+
+        <!-- 6. App → emptyDir (init container writes, dashed L-path) -->
+        <path d="M 532,306 L 532,325 L 500,325 L 500,350" fill="none" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowhead-violet)"/>
+        <text x="549" y="319" fill="#7c3aed" font-size="8" text-anchor="start" font-family="JetBrains Mono, monospace">init</text>
+
+        <!-- 7. Ansible → Helm (renders values) -->
+        <line x1="361" y1="527" x2="434" y2="527" stroke="#475569" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <text x="397" y="519" fill="#475569" font-size="8" text-anchor="middle" font-family="JetBrains Mono, monospace">renders</text>
+
+        <!-- 8. Helm → K8s cluster (deploy, dashed vertical) -->
+        <line x1="500" y1="499" x2="500" y2="447" stroke="#475569" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrowhead)"/>
+        <text x="514" y="476" fill="#475569" font-size="8" text-anchor="start" font-family="JetBrains Mono, monospace">deploy</text>
+
+        <!-- ═══════════════════════════════════════════════════
+             BOUNDARIES
+             ═══════════════════════════════════════════════════ -->
+
+        <!-- Kubernetes cluster (amber dashed outer boundary) -->
+        <rect x="200" y="165" width="560" height="280" rx="12"
+              fill="rgba(120,53,15,0.03)" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="8,4"/>
+        <text x="216" y="184" fill="#fbbf24" font-size="9" font-weight="600"
+              font-family="JetBrains Mono, monospace">Kubernetes cluster (KOPS · us-east-1 · Cilium CNI)</text>
+
+        <!-- Pod (slate dashed inner boundary) -->
+        <rect x="230" y="210" width="380" height="210" rx="8"
+              fill="none" stroke="#334155" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="246" y="225" fill="#475569" font-size="8"
+              font-family="JetBrains Mono, monospace">pod</text>
+
+        <!-- ═══════════════════════════════════════════════════
+             COMPONENT BOXES — drawn after arrows (mask via opaque bg)
+             ═══════════════════════════════════════════════════ -->
+
+        <!-- User / Browser -->
+        <rect x="30" y="235" width="100" height="70" rx="6" fill="#0f172a"/>
+        <rect x="30" y="235" width="100" height="70" rx="6"
+              fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="80" y="263" fill="white" font-size="12" font-weight="600"
+              text-anchor="middle" font-family="JetBrains Mono, monospace">User</text>
+        <text x="80" y="279" fill="#94a3b8" font-size="9"
+              text-anchor="middle" font-family="JetBrains Mono, monospace">browser</text>
+
+        <!-- Nginx sidecar -->
+        <rect x="245" y="235" width="145" height="70" rx="6" fill="#0f172a"/>
+        <rect x="245" y="235" width="145" height="70" rx="6"
+              fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="317" y="260" fill="white" font-size="12" font-weight="600"
+              text-anchor="middle" font-family="JetBrains Mono, monospace">Nginx sidecar</text>
+        <text x="317" y="276" fill="#94a3b8" font-size="9"
+              text-anchor="middle" font-family="JetBrains Mono, monospace">port 80 · /static/</text>
+
+        <!-- Go application -->
+        <rect x="455" y="235" width="145" height="70" rx="6" fill="#0f172a"/>
+        <rect x="455" y="235" width="145" height="70" rx="6"
+              fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="527" y="260" fill="white" font-size="12" font-weight="600"
+              text-anchor="middle" font-family="JetBrains Mono, monospace">Go application</text>
+        <text x="527" y="276" fill="#94a3b8" font-size="9"
+              text-anchor="middle" font-family="JetBrains Mono, monospace">port 8080 · CSV parse</text>
+
+        <!-- emptyDir shared volume -->
+        <rect x="335" y="350" width="185" height="50" rx="6" fill="#0f172a"/>
+        <rect x="335" y="350" width="185" height="50" rx="6"
+              fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="427" y="370" fill="white" font-size="11" font-weight="600"
+              text-anchor="middle" font-family="JetBrains Mono, monospace">emptyDir volume</text>
+        <text x="427" y="386" fill="#94a3b8" font-size="8"
+              text-anchor="middle" font-family="JetBrains Mono, monospace">/shared/static/ · nginx reads · init writes</text>
+
+        <!-- HPA annotation (inside K8s boundary, right of App) -->
+        <text x="648" y="244" fill="#475569" font-size="9" font-weight="600"
+              text-anchor="middle" font-family="JetBrains Mono, monospace">HPA</text>
+        <text x="648" y="258" fill="#334155" font-size="8"
+              text-anchor="middle" font-family="JetBrains Mono, monospace">min 2 · max 10</text>
+        <text x="648" y="270" fill="#334155" font-size="8"
+              text-anchor="middle" font-family="JetBrains Mono, monospace">CPU target 60%</text>
+
+        <!-- S3 bucket -->
+        <rect x="820" y="235" width="130" height="70" rx="6" fill="#0f172a"/>
+        <rect x="820" y="235" width="130" height="70" rx="6"
+              fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="885" y="260" fill="white" font-size="12" font-weight="600"
+              text-anchor="middle" font-family="JetBrains Mono, monospace">S3 bucket</text>
+        <text x="885" y="276" fill="#94a3b8" font-size="9"
+              text-anchor="middle" font-family="JetBrains Mono, monospace">processed/ prefix</text>
+
+        <!-- S3 lifecycle annotation -->
+        <text x="885" y="320" fill="#78350f" font-size="8"
+              text-anchor="middle" font-family="JetBrains Mono, monospace">Standard → IA → Glacier</text>
+
+        <!-- Ansible -->
+        <rect x="230" y="500" width="130" height="55" rx="6" fill="#0f172a"/>
+        <rect x="230" y="500" width="130" height="55" rx="6"
+              fill="rgba(30,41,59,0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="295" y="522" fill="white" font-size="12" font-weight="600"
+              text-anchor="middle" font-family="JetBrains Mono, monospace">Ansible</text>
+        <text x="295" y="538" fill="#94a3b8" font-size="9"
+              text-anchor="middle" font-family="JetBrains Mono, monospace">group_vars + vault</text>
+
+        <!-- Helm chart -->
+        <rect x="435" y="500" width="130" height="55" rx="6" fill="#0f172a"/>
+        <rect x="435" y="500" width="130" height="55" rx="6"
+              fill="rgba(30,41,59,0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="500" y="522" fill="white" font-size="12" font-weight="600"
+              text-anchor="middle" font-family="JetBrains Mono, monospace">Helm chart</text>
+        <text x="500" y="538" fill="#94a3b8" font-size="9"
+              text-anchor="middle" font-family="JetBrains Mono, monospace">renders + deploys</text>
+
+        <!-- ═══════════════════════════════════════════════════
+             LEGEND — below all boundaries
+             ═══════════════════════════════════════════════════ -->
+        <text x="30" y="596" fill="#475569" font-size="9" font-weight="600"
+              font-family="JetBrains Mono, monospace">Legend</text>
+
+        <rect x="30"  y="606" width="12" height="10" rx="2" fill="rgba(8,51,68,0.4)"   stroke="#22d3ee" stroke-width="1"/>
+        <text x="48"  y="615" fill="#64748b" font-size="8" font-family="JetBrains Mono, monospace">frontend / nginx</text>
+
+        <rect x="168" y="606" width="12" height="10" rx="2" fill="rgba(6,78,59,0.4)"   stroke="#34d399" stroke-width="1"/>
+        <text x="186" y="615" fill="#64748b" font-size="8" font-family="JetBrains Mono, monospace">backend / go</text>
+
+        <rect x="296" y="606" width="12" height="10" rx="2" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1"/>
+        <text x="314" y="615" fill="#64748b" font-size="8" font-family="JetBrains Mono, monospace">aws / cloud</text>
+
+        <rect x="416" y="606" width="12" height="10" rx="2" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1"/>
+        <text x="434" y="615" fill="#64748b" font-size="8" font-family="JetBrains Mono, monospace">shared volume</text>
+
+        <rect x="553" y="606" width="12" height="10" rx="2" fill="rgba(30,41,59,0.5)"  stroke="#94a3b8" stroke-width="1"/>
+        <text x="571" y="615" fill="#64748b" font-size="8" font-family="JetBrains Mono, monospace">config tooling</text>
+
+        <rect x="686" y="606" width="12" height="10" rx="2" fill="none" stroke="#fbbf24" stroke-width="1" stroke-dasharray="3,2"/>
+        <text x="704" y="615" fill="#64748b" font-size="8" font-family="JetBrains Mono, monospace">k8s boundary</text>
+      </svg>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot" style="background:#22d3ee"></div>
+          <h3>Request flow</h3>
+        </div>
+        <ul>
+          <li>• Browser → Nginx sidecar :80 → Go app :8080</li>
+          <li>• Nginx serves /static/ from emptyDir volume</li>
+          <li>• Go app parses CSV, renders result to browser</li>
+          <li>• Processed file uploaded to S3 via AWS SDK v2</li>
+          <li>• S3 listing drives the previously-processed-files page</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot" style="background:#a78bfa"></div>
+          <h3>Pod design</h3>
+        </div>
+        <ul>
+          <li>• Nginx + Go app run in the same Kubernetes pod</li>
+          <li>• emptyDir volume shared for static assets (CSS/JS)</li>
+          <li>• Init container (app image) populates volume at start</li>
+          <li>• Nginx serves /static/ — app never handles static files</li>
+          <li>• HPA auto-scales between 2 and 10 replicas at CPU 60%</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot" style="background:#94a3b8"></div>
+          <h3>Config and storage chain</h3>
+        </div>
+        <ul>
+          <li>• Ansible group_vars: source of truth for all env config</li>
+          <li>• Ansible Vault encrypts secrets at rest in source control</li>
+          <li>• Helm renders values.yaml and deploys to Kubernetes</li>
+          <li>• ConfigMap + Secret deliver config to pod at runtime</li>
+          <li>• S3 lifecycle: Standard → Standard-IA → Glacier IR → Deep Archive</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="footer">SpiderSilk DevOps Case Study · Go · Kubernetes (KOPS) · Nginx · AWS S3 · Helm · Ansible · Terraform · Cilium CNI</p>
+  </div>
+
+  <script>
+    async function copyAsImage(btn) {
+      const orig = btn.textContent;
+      try {
+        const el = document.getElementById('report-container');
+        const r = el.getBoundingClientRect();
+        const pad = 32;
+        const canvas = await html2canvas(document.body, {
+          backgroundColor: '#020617', scale: 2, useCORS: true,
+          ignoreElements: e => e.classList && e.classList.contains('toolbar'),
+          x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad,
+          width: r.width + pad * 2, height: r.height + pad * 2
+        });
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        btn.textContent = '✓ Copied!';
+      } catch { btn.textContent = '✗ Failed'; }
+      setTimeout(() => btn.textContent = orig, 2000);
+    }
+
+    async function downloadPNG(btn) {
+      const orig = btn.textContent;
+      btn.textContent = '⏳ ...';
+      try {
+        const el = document.getElementById('report-container');
+        const r = el.getBoundingClientRect();
+        const pad = 32;
+        const canvas = await html2canvas(document.body, {
+          backgroundColor: '#020617', scale: 2, useCORS: true,
+          ignoreElements: e => e.classList && e.classList.contains('toolbar'),
+          x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad,
+          width: r.width + pad * 2, height: r.height + pad * 2
+        });
+        const a = document.createElement('a');
+        a.download = 'architecture.png';
+        a.href = canvas.toDataURL('image/png');
+        a.click();
+        btn.textContent = '✓ Done!';
+      } catch { btn.textContent = '✗ Failed'; }
+      setTimeout(() => btn.textContent = orig, 2000);
+    }
+
+    async function downloadPDF(btn) {
+      const orig = btn.textContent;
+      btn.textContent = '⏳ ...';
+      try {
+        const el = document.getElementById('report-container');
+        const r = el.getBoundingClientRect();
+        const pad = 32;
+        const canvas = await html2canvas(document.body, {
+          backgroundColor: '#020617', scale: 2, useCORS: true,
+          ignoreElements: e => e.classList && e.classList.contains('toolbar'),
+          x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad,
+          width: r.width + pad * 2, height: r.height + pad * 2
+        });
+        const { jsPDF } = window.jspdf;
+        const orientation = canvas.width > canvas.height ? 'landscape' : 'portrait';
+        const pdf = new jsPDF({ orientation, unit: 'px', format: [canvas.width, canvas.height], hotfixes: ['px_scaling'] });
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height);
+        pdf.save('architecture.pdf');
+        btn.textContent = '✓ Done!';
+      } catch { btn.textContent = '✗ Failed'; }
+      setTimeout(() => btn.textContent = orig, 2000);
+    }
+  </script>
+</body>
+</html>

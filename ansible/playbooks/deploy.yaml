@@ -1,0 +1,25 @@
+---
+# Deploy the csv-processor application.
+#
+# Usage (run from the ansible/ directory):
+#
+#   Full deploy:
+#     ansible-playbook playbooks/deploy.yaml --ask-vault-pass
+#
+#   Config render only (no helm deploy):
+#     ansible-playbook playbooks/deploy.yaml --tags config --ask-vault-pass
+#
+#   Deploy only (skip re-rendering values):
+#     ansible-playbook playbooks/deploy.yaml --tags deploy --ask-vault-pass
+#
+#   Override environment values at runtime:
+#     ansible-playbook playbooks/deploy.yaml \
+#       -e "s3_bucket=csv-processor-staging image_tag=v1.2.3" \
+#       --ask-vault-pass
+
+- name: Deploy csv-processor
+  hosts: local
+  connection: local
+  roles:
+    - role: app-config
+      tags: [config, deploy]

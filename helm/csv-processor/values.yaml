@@ -1,0 +1,63 @@
+# Default values — override per environment with values-custom.yaml.
+# Deploy: helm upgrade --install csv-processor helm/csv-processor \
+#           --namespace csv-processor --create-namespace \
+#           --values helm/csv-processor/values-custom.yaml
+
+replicaCount: 2
+
+image:
+  repository: or4dx/csv-processor
+  tag: latest
+  # Always: ensures each rollout pulls the latest build when using mutable tags
+  # such as :latest during development. Change to IfNotPresent in production
+  # once tags are pinned to a Git commit SHA for reproducible deployments.
+  pullPolicy: Always
+
+nginx:
+  image: nginxinc/nginx-unprivileged:1.25-alpine
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  # nginx listens on 8000 (non-privileged, no conflict with app's 8080).
+  # The Service maps port 80 → targetPort 8000; callers see port 80.
+  targetPort: http-nginx
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  # 60% leaves headroom for scale-out lag (~30–60 s) during traffic spikes.
+  targetCPUUtilizationPercentage: 60
+  # Secondary metric: CSV parsing buffers full files in memory.
+  targetMemoryUtilizationPercentage: 80
+
+config:
+  port: "8080"
+  logLevel: info
+  awsRegion: us-east-1
+  s3Bucket: ""
+  templateDir: /templates
+
+resources:
+  app:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  nginx:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+serviceAccount:
+  # IAM role ARN created by Terraform for IRSA. The pod assumes this role via
+  # the OIDC provider — no static AWS credentials needed in the Secret.
+  # Leave empty to disable the IRSA annotation (e.g. local dev without AWS).
+  irsaRoleArn: ""

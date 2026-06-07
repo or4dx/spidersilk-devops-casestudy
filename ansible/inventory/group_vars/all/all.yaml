@@ -1,0 +1,30 @@
+# Non-sensitive configuration — safe to commit in plaintext.
+# Sensitive overrides live in all.vault.yaml (encrypted with ansible-vault).
+#
+# Override at deploy time with -e:
+#   ansible-playbook playbooks/deploy.yaml -e "aws_account_id=123456789012"
+
+app_name: csv-processor
+app_namespace: csv-processor
+
+# Path to the Helm chart, relative to the ansible/ directory.
+chart_path:       "../helm/csv-processor"
+helm_release_name: "{{ app_name }}"
+
+# Image
+image_tag: latest
+
+# App runtime config (maps 1:1 to Helm values.config.*)
+app_port:   "8080"
+log_level:  info
+aws_region:      us-east-1
+aws_account_id:  ""          # override with -e "aws_account_id=123456789012"
+s3_bucket:  csv-processor-uploads-dev  # matches Terraform: "${var.bucket_name_prefix}-${var.env}"
+
+# Autoscaling
+autoscaling_enabled:      true
+autoscaling_min_replicas: 2
+autoscaling_max_replicas: 10
+
+# Static replica count (used only when autoscaling_enabled: false)
+replica_count: 2

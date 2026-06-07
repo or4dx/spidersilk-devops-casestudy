@@ -1,0 +1,112 @@
+apiVersion: kops.k8s.io/v1alpha2
+kind: Cluster
+metadata:
+  name: csv-processor.k8s.local
+spec:
+  # Cloud
+  cloudProvider: aws
+  configBase: s3://csv-processor-kops-state/csv-processor.k8s.local
+  region: us-east-1        # Deepest spot market; broadest AWS service availability
+
+  # Kubernetes version
+  kubernetesVersion: "1.34.0"
+
+  # API server
+  api:
+    loadBalancer:
+      type: Public           # ALB fronts the API server; required for kubectl from outside VPC
+  masterPublicName: api.csv-processor.k8s.local
+
+  # Networking: Cilium 
+  # Cilium chosen over Calico:
+  #   - eBPF dataplane replaces iptables → lower latency, better observability
+  #   - Native network policy enforcement without kube-proxy
+  #   - Hubble telemetry for L3-L7 flow visibility (relevant to SpiderSilk's
+  #     security-first culture)
+  #   - First-class support in KOPS since 1.18
+  networking:
+    cilium:
+      enableNodePort: true   # Replaces kube-proxy for NodePort services
+
+  networkCIDR: 172.20.0.0/16
+  nonMasqueradeCIDR: 100.64.0.0/10
+  podCIDR: 100.96.0.0/11
+  serviceClusterIPRange: 100.64.0.0/13
+
+  # Subnets: private workers, utility (NAT/LB) in 3 AZs 
+  subnets:
+    - cidr: 172.20.32.0/19
+      name: us-east-1a
+      type: Private
+      zone: us-east-1a
+    - cidr: 172.20.64.0/19
+      name: us-east-1b
+      type: Private
+      zone: us-east-1b
+    - cidr: 172.20.96.0/19
+      name: us-east-1c
+      type: Private
+      zone: us-east-1c
+    - cidr: 172.20.0.0/22
+      name: utility-us-east-1a
+      type: Utility
+      zone: us-east-1a
+    - cidr: 172.20.4.0/22
+      name: utility-us-east-1b
+      type: Utility
+      zone: us-east-1b
+    - cidr: 172.20.8.0/22
+      name: utility-us-east-1c
+      type: Utility
+      zone: us-east-1c
+
+  # Topology
+  topology:
+    dns:
+      type: None             # Gossip DNS — cluster name ends in .k8s.local, no Route53 needed
+    masters: private
+    nodes: private
+
+  # etcd
+  etcdClusters:
+    - name: main
+      etcdMembers:
+        - name: a
+          instanceGroup: master-us-east-1a
+      manager:
+        backupRetentionDays: 90
+    - name: events
+      etcdMembers:
+        - name: a
+          instanceGroup: master-us-east-1a
+
+  # IAM / IRSA 
+  # serviceAccountIssuerDiscovery enables IRSA: Kubernetes ServiceAccounts can
+  # assume IAM roles via OIDC without static AWS credentials in Secrets.
+  # The discoveryStore S3 bucket must be publicly readable so AWS STS can fetch
+  # the JWKS signing keys.
+  iam:
+    allowContainerRegistry: true
+    legacy: false
+    useServiceAccountExternalPermissions: true
+  serviceAccountIssuerDiscovery:
+    discoveryStore: s3://csv-processor-oidc-store
+    enableAWSOIDCProvider: true
+
+  # Cluster Autoscaler — managed KOPS addon
+  # KOPS deploys the autoscaler, creates its IAM role via IRSA, and wires up
+  # node-group discovery automatically. No separate manifest needed.
+  clusterAutoscaler:
+    enabled: true
+    expander: least-waste
+    balanceSimilarNodeGroups: true
+    skipNodesWithSystemPods: false
+    skipNodesWithLocalStorage: false
+    awsUseStaticInstanceList: false
+
+  # Authorization
+  authorization:
+    rbac: {}
+
+  # Channel
+  channel: stable

@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "csv-processor.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "csv-processor.labels" . | nindent 4 }}
+data:
+  PORT:         {{ .Values.config.port | quote }}
+  LOG_LEVEL:    {{ .Values.config.logLevel | quote }}
+  AWS_REGION:   {{ .Values.config.awsRegion | quote }}
+  S3_BUCKET:    {{ .Values.config.s3Bucket | quote }}
+  TEMPLATE_DIR: {{ .Values.config.templateDir | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "csv-processor.fullname" . }}-nginx-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "csv-processor.labels" . | nindent 4 }}
+data:
+  default.conf: |
+    server {
+        listen       8000;
+        server_name  _;
+
+        # Static assets served directly from the shared emptyDir volume.
+        # Populated by the init container at pod startup; nginx handles /static/
+        # entirely so these requests never reach the Go app.
+        location /static/ {
+            alias      /shared/static/;
+            expires    1d;
+            add_header Cache-Control "public, immutable";
+            gzip       on;
+            gzip_types text/css application/javascript;
+        }
+
+        # All other traffic proxied to the Go app on localhost:{{ .Values.config.port }}.
+        location / {
+            proxy_pass         http://localhost:{{ .Values.config.port }};
+            proxy_http_version 1.1;
+            proxy_set_header   Host              $host;
+            proxy_set_header   X-Real-IP         $remote_addr;
+            proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header   X-Forwarded-Proto $scheme;
+            proxy_read_timeout 30s;
+        }
+    }

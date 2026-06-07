@@ -1,0 +1,38 @@
+apiVersion: kops.k8s.io/v1alpha2
+kind: InstanceGroup
+metadata:
+  labels:
+    kops.k8s.io/cluster: csv-processor.k8s.local
+  name: master-us-east-1a
+spec:
+  role: Master
+
+  # Instance type 
+  # t3.medium: 2 vCPU / 4 GB — sufficient for etcd + control-plane components
+  # on a demo/staging cluster. Upgrade to m5.large for production etcd write load.
+  machineType: t3.medium
+  # ssm: prefix resolves to the latest Ubuntu 22.04 AMI at cluster-create time
+  # — no hardcoded snapshot date to go stale.
+  image: ssm:/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id
+
+  #  Scaling
+  # minSize:1 for demo/cost; maxSize:3 to allow scale-up to a 3-node etcd quorum
+  # without config changes. Always keep count ODD — Raft leader election requires
+  # a majority (2 of 3), and even counts (2, 4) create split-brain risk.
+  minSize: 1
+  maxSize: 3
+
+  # On-demand only 
+  # Masters must never run on spot: an interruption would trigger an etcd leader
+  # election mid-flight and risk losing writes. maxPrice is intentionally absent.
+
+  # Placement 
+  subnets:
+    - us-east-1a          # Single AZ for demo; add us-east-1b / us-east-1c for HA
+
+  nodeLabels:
+    kops.k8s.io/instancegroup: master-us-east-1a
+
+  # ── Root volume ──────────────────────────────────────────────────────────────
+  rootVolumeSize: 64
+  rootVolumeType: gp3

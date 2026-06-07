@@ -1,0 +1,10 @@
+*.env
+
+# This is to show the vault file included in the solution.
+# *.vault.yaml 
+
+
+/tmp/
+*.tfstate
+*.tfstate.backup
+.terraform/

@@ -1,0 +1,82 @@
+apiVersion: kops.k8s.io/v1alpha2
+kind: InstanceGroup
+metadata:
+  labels:
+    kops.k8s.io/cluster: csv-processor.k8s.local
+  name: nodes-spot
+spec:
+  role: Node
+  image: ssm:/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id
+
+  # ── Instance type ────────────────────────────────────────────────────────────
+  machineType: m5.large
+
+  # ── Spot price ceiling ───────────────────────────────────────────────────────
+  # maxPrice caps what we'll bid. $0.05/hr is ~3× the typical m5.large spot
+  # price in us-east-1, giving headroom without runaway cost.
+  # Setting this is what tells KOPS/AWS to use spot for this IG.
+  maxPrice: "0.05"
+
+  # ── Scaling ──────────────────────────────────────────────────────────────────
+  minSize: 0                       # Scale to zero when cluster is idle
+  maxSize: 10
+
+  # ── Mixed instances: capacity-optimized ──────────────────────────────────────
+  # capacity-optimized picks the spot pool with the most available capacity,
+  # reducing interruption rates vs lowest-price (which chases the cheapest pool
+  # and is more likely to be reclaimed).
+  mixedInstancesPolicy:
+    instances:
+      - m5.large
+      - m5a.large
+      - m4.large
+    onDemandBase: 0
+    onDemandAboveBase: 0           # 100% spot
+    spotAllocationStrategy: capacity-optimized
+
+  # ── Autoscaler discovery labels ───────────────────────────────────────────────
+  # node-template tags are required for scale-from-zero (minSize: 0).
+  # Without them the autoscaler has no nodes to inspect and cannot know this
+  # group's labels/taints, so pending pods with spot tolerations are never
+  # scheduled onto the zero-count group.
+  cloudLabels:
+    k8s.io/cluster-autoscaler/enabled: "true"
+    k8s.io/cluster-autoscaler/csv-processor.k8s.local: "owned"
+    k8s.io/cluster-autoscaler/node-template/label/node-type: spot
+    k8s.io/cluster-autoscaler/node-template/taint/spot: "true:PreferNoSchedule"
+
+  # ── Node labels ──────────────────────────────────────────────────────────────
+  nodeLabels:
+    kops.k8s.io/instancegroup: nodes-spot
+    node-type: spot
+
+  # ── Taints ───────────────────────────────────────────────────────────────────
+  # PreferNoSchedule steers workloads without a matching toleration to on-demand
+  # nodes, but does NOT hard-block them (avoids scheduling deadlocks when
+  # on-demand capacity is exhausted). Workloads that explicitly tolerate spot
+  # (e.g. batch jobs, the CSV processor) are scheduled here preferentially.
+  taints:
+    - spot=true:PreferNoSchedule
+
+  # ── Placement ────────────────────────────────────────────────────────────────
+  subnets:
+    - us-east-1a
+    - us-east-1b
+    - us-east-1c
+
+  # ── Lifecycle hooks ───────────────────────────────────────────────────────────
+  # AWS sends a 2-minute spot termination notice via instance metadata.
+  # The ASG lifecycle hook fires on EC2_INSTANCE_TERMINATING and holds the
+  # instance in a "Terminating:Wait" state for heartbeatTimeout seconds.
+  # aws-node-termination-handler (deployed separately as a DaemonSet) intercepts
+  # the notice, cordons + drains the node, then completes the lifecycle action,
+  # allowing AWS to proceed with termination cleanly.
+  lifecycleHooks:
+    - name: spot-termination-drain
+      lifecycleTransition: autoscaling:EC2_INSTANCE_TERMINATING
+      defaultResult: CONTINUE
+      heartbeatTimeout: 300        # 5 minutes: enough for graceful pod eviction
+
+  # ── Root volume ──────────────────────────────────────────────────────────────
+  rootVolumeSize: 50
+  rootVolumeType: gp3

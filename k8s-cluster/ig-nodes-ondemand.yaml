@@ -1,0 +1,55 @@
+apiVersion: kops.k8s.io/v1alpha2
+kind: InstanceGroup
+metadata:
+  labels:
+    kops.k8s.io/cluster: csv-processor.k8s.local
+  name: nodes-ondemand
+spec:
+  role: Node
+  image: ssm:/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id
+
+  # ── Instance type: mixed on-demand ───────────────────────────────────────────
+  # Primary type declared here; alternatives listed in mixedInstancesPolicy.
+  # AWS picks the best available from the list — reduces capacity shortfalls
+  # without touching price (all are similarly priced m5-generation instances).
+  machineType: m5.large
+
+  # ── Scaling ──────────────────────────────────────────────────────────────────
+  minSize: 1
+  maxSize: 5
+
+  # ── On-demand only — maxPrice intentionally absent ───────────────────────────
+  # Workloads scheduled here cannot tolerate interruption (stateful, system-critical).
+  # Do NOT set maxPrice; its presence is what enables spot bidding in KOPS.
+  mixedInstancesPolicy:
+    instances:
+      - m5.large
+      - m5a.large
+      - m4.large
+    onDemandBase: 1                # At least 1 on-demand instance always running
+    onDemandAboveBase: 100         # 100% of additional capacity is also on-demand
+    spotAllocationStrategy: lowest-price  # field ignored — onDemandAboveBase: 100 means no spot is used
+
+  # ── Autoscaler discovery labels ───────────────────────────────────────────────
+  # The Cluster Autoscaler discovers node groups by these labels.
+  # Both labels are required: "enabled" marks the group as managed;
+  # the cluster-name label scopes discovery to this cluster (prevents
+  # cross-cluster interference when multiple clusters share the same AWS account).
+  cloudLabels:
+    k8s.io/cluster-autoscaler/enabled: "true"
+    k8s.io/cluster-autoscaler/csv-processor.k8s.local: "owned"
+
+  # ── Node labels ──────────────────────────────────────────────────────────────
+  nodeLabels:
+    kops.k8s.io/instancegroup: nodes-ondemand
+    node-type: on-demand
+
+  # ── Placement: spread across 3 AZs ──────────────────────────────────────────
+  subnets:
+    - us-east-1a
+    - us-east-1b
+    - us-east-1c
+
+  # ── Root volume ──────────────────────────────────────────────────────────────
+  rootVolumeSize: 50
+  rootVolumeType: gp3

@@ -1,0 +1,17 @@
+# Custom overrides — applied on top of values.yaml for this deployment.
+# Deploy: helm upgrade --install csv-processor helm/csv-processor \
+#           --namespace csv-processor --create-namespace \
+#           --values helm/csv-processor/values-custom.yaml
+#
+# For multi-environment deployments, create environment-specific files:
+#   values-staging.yaml, values-prod.yaml
+# and pass the appropriate one to --values. The bucket name must match
+# the Terraform output: terraform output bucket_name
+
+config:
+  s3Bucket: csv-processor-uploads-dev
+
+serviceAccount:
+  # Replace ACCOUNT_ID with your AWS account ID after running terraform apply.
+  # The full ARN is available via: terraform output bucket_arn
+  irsaRoleArn: "arn:aws:iam::ACCOUNT_ID:role/csv-processor-irsa"
