@@ -104,7 +104,7 @@ ansible-playbook playbooks/deploy.yaml \
 
 ## Design Decisions
 
-For a full walkthrough of architectural choices, trade-offs, and the reasoning behind key implementation decisions, see [decisions.md](../decisions.md).
+For a full walkthrough of architectural choices, trade-offs, and the reasoning behind key implementation decisions, see [decisions.md](DECISIONS.md).
 
 ---
 
