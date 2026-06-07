@@ -121,7 +121,7 @@
           <tr>
             <td><span class="mono">{{.Key}}</span></td>
             <td>{{.LastModified.Format "Jan 2, 2006 at 15:04 UTC"}}</td>
-            <td>{{humanSize .Size}}</td>
+            <td>{{humanFileSize .Size}}</td>
           </tr>
           {{end}}
         </tbody>

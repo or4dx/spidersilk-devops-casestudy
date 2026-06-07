@@ -3,12 +3,10 @@
 
 ## Overview
 
-The CSV Processor is a small Golang application that reads the content of a CSV file uploaded from disk, processes the data and returns a cleanly formatted response that is displayed in the user interface. The applications is designed to validate and show case my though process in implementing the requirements of the case study, and is not intended to be a production ready application.
+The CSV Processor is a small Golang application that reads the content of a CSV file uploaded from disk, processes the data and returns a cleanly formatted response that is displayed in the user interface. The applications is designed to validate and show case my thought process in implementing the requirements of the case study, and is not intended to be a production ready application.
 
 
 ## Installation
-
-## Setup
 
 ### Prerequisites
 
@@ -25,25 +23,15 @@ The CSV Processor is a small Golang application that reads the content of a CSV 
 
 | Variable | Default | Description |
 |---|---|---|
-| `PORT` | `8080` | HTTP listen port |
-| `S3_BUCKET` | `""` | Bucket name — empty disables S3 |
+| `PORT` | `8080` | HTTP listen port for the App |
+| `S3_BUCKET` | `""` | Bucket name, an empty value disables S3 |
 | `AWS_REGION` | `us-east-1` | S3 client region |
 | `LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
-| `TEMPLATE_DIR` | `templates` | Template directory |
-| `STATIC_DIR` | `static` | Static assets dir (local dev only; Nginx handles this in K8s) |
-
+  
 ### Local Development
 
 ```bash
-cd app && go run .                          # no S3
-S3_BUCKET=csv-processor-uploads-dev go run . # with S3
-go test ./...
-```
-
-### Local Development
-
-```bash
-cd app && go run .                          # no S3
+cd app && go run .                           # no S3
 S3_BUCKET=csv-processor-uploads-dev go run . # with S3
 go test ./...
 ```
@@ -79,10 +67,30 @@ kops update cluster csv-processor.k8s.local --yes
 kops validate cluster --wait 10m
 ```
 
+### Deploy (Helm direct)
+
+```bash
+helm upgrade --install csv-processor helm/csv-processor \
+  --namespace csv-processor \
+  --create-namespace \
+  --wait \
+  --timeout 5m
+```
+
+To override values (e.g. S3 bucket):
+
+```bash
+helm upgrade --install csv-processor helm/csv-processor \
+  --namespace csv-processor \
+  --create-namespace \
+  --set config.s3Bucket=csv-processor-uploads-dev \
+  --wait \
+  --timeout 5m
+```
+
 ### Deploy (Ansible → Helm)
+
 For the purposes of this case study I am checking the ansible vault file to verify the process of securely managing sensitive configuration values locally, but in a production ready scenario I would not use this but likely use a more robust secrets management solution such as HashiCorp Vault or AWS Secrets Manager to manage sensitive configuration values and avoid the need for manual password entry during deployment.
-
-
 
 ```bash
 cd ansible
@@ -96,7 +104,9 @@ ansible-playbook playbooks/deploy.yaml \
 
 
 ## Architecture
-![Architecture Diagram](./architecture.png) __Full architecture diagram available in the diagram-architecture.html__
+
+![Architecture Diagram](./architecture.png) _Full architecture diagram available in the diagram-architecture.html_
+
 
 The application consists of a single Go service that serves an HTML page with a file upload form. When a user uploads a CSV file, the service processes the file and returns a formatted response. The application uses an Nginx sidecar to serve static assets and HTML templates, while the Go service handles the business logic and routing.
 

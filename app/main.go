@@ -17,25 +17,27 @@ import (
 	"github.com/or4dx/csv-processor/handlers"
 )
 
+// Paths are fixed by the Dockerfile COPY destinations — not runtime config.
+const (
+	templatesDir = "/templates"
+	staticDir    = "/static"
+)
+
 // Config holds all runtime configuration sourced from environment variables.
 // Values flow in via Kubernetes ConfigMap/Secret → Helm values → Ansible.
 type Config struct {
-	Port        string // PORT, default "8080"
-	S3Bucket    string // S3_BUCKET — empty means S3 is disabled
-	AWSRegion   string // AWS_REGION, default "us-east-1"
-	LogLevel    string // LOG_LEVEL: debug | info | warn | error
-	TemplateDir string // TEMPLATE_DIR, default "templates"
-	StaticDir   string // STATIC_DIR, default "static"
+	Port      string // PORT, default "8080"
+	S3Bucket  string // S3_BUCKET — empty means S3 is disabled
+	AWSRegion string // AWS_REGION, default "us-east-1"
+	LogLevel  string // LOG_LEVEL: debug | info | warn | error
 }
 
 func loadConfig() Config {
 	return Config{
-		Port:        getEnvOrDefault("PORT", "8080"),
-		S3Bucket:    os.Getenv("S3_BUCKET"),
-		AWSRegion:   getEnvOrDefault("AWS_REGION", "us-east-1"),
-		LogLevel:    getEnvOrDefault("LOG_LEVEL", "info"),
-		TemplateDir: getEnvOrDefault("TEMPLATE_DIR", "templates"),
-		StaticDir:   getEnvOrDefault("STATIC_DIR", "static"),
+		Port:      getEnvOrDefault("PORT", "8080"),
+		S3Bucket:  os.Getenv("S3_BUCKET"),
+		AWSRegion: getEnvOrDefault("AWS_REGION", "us-east-1"),
+		LogLevel:  getEnvOrDefault("LOG_LEVEL", "info"),
 	}
 }
 
@@ -53,9 +55,9 @@ func main() {
 
 	// Fail fast: if the template can't load at startup, the container should
 	// crash immediately rather than serve 500s on every request.
-	tmplPath := filepath.Join(cfg.TemplateDir, "index.html")
+	tmplPath := filepath.Join(templatesDir, "index.html")
 	tmpl, err := template.New("index.html").Funcs(template.FuncMap{
-		"humanSize": func(b int64) string {
+		"humanFileSize": func(b int64) string {
 			const kb, mb = int64(1024), int64(1024 * 1024)
 			switch {
 			case b >= mb:
@@ -102,7 +104,7 @@ func main() {
 	})
 	// Serve static assets from disk. In Kubernetes, Nginx intercepts /static/
 	// before traffic reaches Go, so this handler is only active locally.
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir(cfg.StaticDir))))
+	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
